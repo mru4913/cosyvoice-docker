@@ -388,7 +388,7 @@ async def create_speech(request: SpeechRequest):
             raise HTTPException(status_code=500, detail="Voice audio file not found")
 
         # Use inference_instruct2 for custom voice
-        if instruct_text:
+        if instruct_text and "zero_shot" not in instruct_text:
             output = model.inference_instruct2(
                 request.input,
                 instruct_text,
