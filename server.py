@@ -18,6 +18,7 @@ Mount Points:
 import os
 import sys
 import gc
+import io
 import uuid
 import logging
 import threading
@@ -29,7 +30,7 @@ import torch
 import torchaudio
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -424,13 +425,22 @@ async def create_speech(request: SpeechRequest):
             headers={"X-Sample-Rate": str(model.sample_rate)},
         )
 
-    # Collect and return WAV
+    # Collect and return WAV as bytes
     speeches = [chunk["tts_speech"] for chunk in output]
     full_speech = torch.cat(speeches, dim=1)
-    filename = f"speech_{uuid.uuid4().hex[:8]}.wav"
-    output_path = save_audio(full_speech, model.sample_rate, filename)
 
-    return FileResponse(str(output_path), media_type="audio/wav", filename=filename)
+    # Save to memory buffer instead of file
+    buffer = io.BytesIO()
+    torchaudio.save(buffer, full_speech, model.sample_rate, format="wav")
+    buffer.seek(0)  # Reset buffer position
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="audio/wav",
+        headers={
+            "Content-Disposition": f"attachment; filename=speech_{uuid.uuid4().hex[:8]}.wav"
+        },
+    )
 
 
 @app.post("/v1/audio/voices", response_model=VoiceResponse)
